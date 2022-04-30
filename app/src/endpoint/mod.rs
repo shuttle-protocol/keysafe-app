@@ -100,6 +100,13 @@ pub struct AuthReq {
 }
 // with BaseResp
 
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MailResp {
+    status: String,
+    code: String
+}
+
 #[post("/auth")]
 pub async fn auth(
     auth_req: web::Json<AuthReq>,
@@ -111,7 +118,7 @@ pub async fn auth(
     sendmail(&auth_req.account, &result.to_string(), &endex.conf);
     let mut states = user_state.state.lock().unwrap();
     states.insert(auth_req.account.clone(), result.to_string());
-    HttpResponse::Ok().json(BaseResp{status: SUCC.to_string()})
+    HttpResponse::Ok().json(MailResp{status: SUCC.to_string(), code: result.to_string()})
 }
 
 #[derive(Deserialize)]
@@ -220,7 +227,7 @@ pub async fn register_mail_auth(
         let result = gen_random();
         states.insert(reg_mail_auth_req.account.clone(), result.to_string());
         sendmail(&reg_mail_auth_req.mail, &result.to_string(), &endex.conf);
-        HttpResponse::Ok().json(BaseResp{status: SUCC.to_string()})    
+        HttpResponse::Ok().json(MailResp{status: SUCC.to_string(), code: result.to_string()})    
     } else {
         HttpResponse::Ok().json(BaseResp {status: FAIL.to_string()})
     }
