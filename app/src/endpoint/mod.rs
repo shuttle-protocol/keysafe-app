@@ -348,19 +348,62 @@ pub async fn register_gauth(
     let mut states = user_state.state.lock().unwrap();
     match states.get(&register_gauth_req.account) {
         Some(v) => {
-            HttpResponse::Ok().json(BaseResp{status: SUCC.to_string()})
         },
         None => { 
-            HttpResponse::Ok().json(BaseResp{status: FAIL.to_string()})
+            return HttpResponse::Ok().json(BaseResp{status: FAIL.to_string()})
         }
+    }
+    let mut retval = sgx_status_t::SGX_SUCCESS;
+    let sealed_size: u32 = 770;
+    let cipher_size: u32 = 256;
+    let mut sealed_gauth = vec![0; sealed_size.try_into().unwrap()];
+    let mut cipher_gauth: Vec<u8> = vec![0; cipher_size.try_into().unwrap()];
+    println!("calling gen gauth secret");
+    let result = unsafe {
+        ecall::ec_gen_gauth_secret(
+            e.geteid(), 
+            &mut retval,
+            sealed_gauth.as_mut_slice().as_mut_ptr() as * mut c_char,
+            sealed_size,
+            cipher_gauth.as_mut_slice().as_mut_ptr() as * mut c_char
+        )
+    };
+    match result {
+        sgx_status_t::SGX_SUCCESS => {
+            println!("calling gen gauth success.");
+            println!("sealed_gauth {:?}", sealed_gauth);
+            println!("cipher_gauth {:?}", cipher_gauth);
+            sealed_gauth.resize(sealed_size.try_into().unwrap(), 0);
+            cipher_gauth.resize(cipher_size.try_into().unwrap(), 0);
+            let mut chars: Vec<char>= Vec::new();
+            for i in cipher_gauth {
+                if i != 0 {
+                    chars.push(i as char);
+                }
+            }
+            let hex_cipher: String = chars.into_iter().collect();
+            println!("cipher hex {:?}", hex_cipher);
+            let hex_sealed = hex::encode(&sealed_gauth[0..sealed_size.try_into().unwrap()]);
+            // let hex_cipher = hex::encode(&cipher_gauth[0..cipher_size.try_into().unwrap()]);
+            persistence::insert_user_cond(
+                &endex.db_pool,
+                persistence::UserCond {
+                    kid: register_gauth_req.account.clone(),
+                    cond_type: "gauth".to_string(),
+                    tee_cond_value: hex_sealed.to_string(),
+                    tee_cond_size: 256
+                }
+            );
+            // println!("getting encrypted gauth secret {}", len2.to_string());
+            HttpResponse::Ok().json(RegisterGauthResp{status: SUCC.to_string(), gauth: hex_cipher})
+        },
+        _ => panic!("require GAuth secret failed!")
     }
 }
 
 #[derive(Deserialize)]
 pub struct DelegateReq {
     account: String,
-    chain: String,
-    chain_addr: String,
     to: String
 }
 
@@ -373,9 +416,7 @@ pub async fn delegate(
     let a = persistence::update_delegate(
         &endex.db_pool,
         &delegate_req.to,
-        &delegate_req.account,
-        &delegate_req.chain,
-        &delegate_req.chain_addr
+        &delegate_req.account
     );
     HttpResponse::Ok().json(BaseResp {status: SUCC.to_string()})
 }
@@ -479,6 +520,33 @@ pub async fn unseal(
             return HttpResponse::Ok().json(BaseResp{status: FAIL.to_string()})
         }
     } else if &unseal_req.cond_type == "gauth" {
+        let query_stmt = format!(
+            "select * from user_cond where kid = '{}' and cond_type = 'gauth'",
+            unseal_req.account
+        );
+        let uconds = persistence::query_user_cond(&endex.db_pool, query_stmt);
+        if uconds.is_empty() {
+            return HttpResponse::Ok().json(BaseResp{status: FAIL.to_string()})
+        }
+        let cond_value = uconds[0].tee_cond_value.clone();
+        let sealed_gauth = hex::decode(cond_value).expect("Decode failed.");
+        let mut sgx_result = sgx_status_t::SGX_SUCCESS;
+        let result = unsafe {
+            ecall::ec_verify_gauth_code(
+                e.geteid(),
+                &mut sgx_result,
+                unseal_req.cipher_cond_value.parse::<i32>().unwrap(),
+                sealed_gauth.as_ptr() as * const c_char,
+                system_time()
+            )
+        };
+        match result {
+            sgx_status_t::SGX_SUCCESS => {
+            },
+            _ => {
+                return HttpResponse::Ok().json(BaseResp{status: FAIL.to_string()})
+            }
+        }        
     }
     // return sealed secret when pass verify
     let secret_stmt = format!(
@@ -555,9 +623,9 @@ pub async fn require_secret(
         ecall::ec_gen_gauth_secret(
             e.geteid(), 
             &mut retval,
-            plaintext1.as_mut_slice().as_mut_ptr() as * mut c_void,
+            plaintext1.as_mut_slice().as_mut_ptr() as * mut c_char,
             len1,
-            plaintext2.as_mut_slice().as_mut_ptr() as * mut c_void
+            plaintext2.as_mut_slice().as_mut_ptr() as * mut c_char
         )
     };
     match result {

@@ -21,7 +21,7 @@ drop table if exists user_cond;
 create table user_cond (
     kid varchar(40) not null,
     cond_type varchar(20) default '' not null,
-    tee_cond_value varchar(1000) default '' not null,
+    tee_cond_value varchar(4096) default '' not null,
     tee_cond_size int default 0,
     PRIMARY KEY(kid, cond_type)
 );
@@ -37,6 +37,6 @@ create table user_secret (
     tee_secret_size int default 0,
     INDEX uid using hash(kid),
     INDEX did using hash(delegate_id),
-    PRIMARY KEY(kid, cond_type)
+    PRIMARY KEY(kid, cond_type, chain, chain_addr)
 );
 

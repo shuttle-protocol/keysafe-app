@@ -18,6 +18,22 @@ extern {
         strval2: *mut c_char
     ) -> sgx_status_t;
 
+    pub fn ec_gen_gauth_secret(
+        eid: sgx_enclave_id_t,
+        retval: *mut sgx_status_t,
+        sealed_gauth: *mut c_char,
+        sealed_size: u32,
+        cipher_gauth: *mut c_char
+    ) -> sgx_status_t;
+
+    pub fn ec_verify_gauth_code(
+        eid: sgx_enclave_id_t,
+        retval: *mut sgx_status_t,
+        code: i32,
+        gauth_secret: *const c_char,
+        time: u64
+    ) -> sgx_status_t;
+
     pub fn ec_auth(
         eid: sgx_enclave_id_t,
         retval: *mut u32,
@@ -117,7 +133,7 @@ extern {
         retval: *mut u32,
         len1: u32
     ) -> sgx_status_t;
-
+    /*
     pub fn ec_gen_gauth_secret(
         eid: sgx_enclave_id_t, 
         retval: *mut sgx_status_t,
@@ -125,6 +141,7 @@ extern {
         len1: u32,
         encrypted_secret: *mut c_void
     ) -> sgx_status_t;
+    */
 
     pub fn ec_check_code(
         eid: sgx_enclave_id_t, 
