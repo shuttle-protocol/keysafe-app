@@ -2,6 +2,7 @@ extern crate openssl;
 #[macro_use]
 use std::str;
 use std::time::SystemTime;
+use std::cmp::*;
 use serde_derive::{Deserialize, Serialize};
 use actix_web::{get, post, web, HttpResponse, Responder};
 use lettre::transport::smtp::authentication::Credentials;
@@ -163,13 +164,32 @@ pub struct InfoResp {
     data: Vec<Coin>
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Eq)]
 pub struct Coin {
     owner: String,
     chain: String,
     chain_addr: String
 }
 //with BaseReq
+
+impl Ord for Coin {
+    fn cmp(&self, other: &Self) -> Ordering {
+        (&self.owner, &self.chain, &self.chain_addr)
+        .cmp(&(&other.owner, &other.chain, &other.chain_addr))
+    }
+}
+
+impl PartialOrd for Coin {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for Coin {
+    fn eq(&self, other: &Self) -> bool {
+        (&self.owner, &self.chain, &self.chain_addr) == (&other.owner, &other.chain, &other.chain_addr)
+    }
+}
 
 #[post("/info")]
 pub async fn info(
@@ -209,6 +229,8 @@ pub async fn info(
             });
         }
     }
+    v.sort();
+    v.dedup();
     HttpResponse::Ok().json(InfoResp {status: SUCC.to_string(), data: v})
 }
 
@@ -297,7 +319,6 @@ pub async fn register_mail(
         }
     }
 }
-
 
 #[derive(Deserialize)]
 pub struct RegPasswordReq {
@@ -482,10 +503,12 @@ pub async fn unseal(
     endex: web::Data<AppState>,
     user_state: web::Data<UserState>
 ) -> HttpResponse {
+    let systime = system_time();
     let e = &endex.enclave;
     // get condition value from db sealed
     let mut states = user_state.state.lock().unwrap();
     if !states.contains_key(&unseal_req.account) {
+        print!("user {} is not a login-user", &unseal_req.account);
         return HttpResponse::Ok().json(BaseResp{status: FAIL.to_string()});
     }
     // get condition
@@ -508,36 +531,31 @@ pub async fn unseal(
         match states.get(&unseal_req.account) {
             Some(v) => {
                 if v != &unseal_req.cipher_cond_value {
+                    println!("user {} mail confirm code does not match", &unseal_req.account);
                     return HttpResponse::Ok().json(BaseResp{status: FAIL.to_string()})
                 }
             },
             None => { 
+                println!("user {} haven't require mail confirm code", &unseal_req.account);
                 return HttpResponse::Ok().json(BaseResp{status: FAIL.to_string()})
             }
         }
     } else if &unseal_req.cond_type == "password" {
         if unseal_req.cipher_cond_value != cond_value {
+            println!("user {} password {} {} do not match ", &unseal_req.account, &unseal_req.cipher_cond_value, cond_value);
             return HttpResponse::Ok().json(BaseResp{status: FAIL.to_string()})
         }
     } else if &unseal_req.cond_type == "gauth" {
-        let query_stmt = format!(
-            "select * from user_cond where kid = '{}' and cond_type = 'gauth'",
-            unseal_req.account
-        );
-        let uconds = persistence::query_user_cond(&endex.db_pool, query_stmt);
-        if uconds.is_empty() {
-            return HttpResponse::Ok().json(BaseResp{status: FAIL.to_string()})
-        }
-        let cond_value = uconds[0].tee_cond_value.clone();
         //let sealed_gauth = hex::decode(cond_value).expect("Decode failed.");
         let mut sgx_result = sgx_status_t::SGX_SUCCESS;
+        println!("gauth {} with code {}", cond_value, unseal_req.cipher_cond_value.parse::<i32>().unwrap());
         let result = unsafe {
             ecall::ec_verify_gauth_code(
                 e.geteid(),
                 &mut sgx_result,
                 unseal_req.cipher_cond_value.parse::<i32>().unwrap(),
                 cond_value.as_ptr() as * const c_char,
-                system_time()
+                systime
             )
         };
         println!("sgx result return {}", result);
