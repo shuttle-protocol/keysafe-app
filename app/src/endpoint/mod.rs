@@ -505,6 +505,7 @@ pub async fn unseal(
 ) -> HttpResponse {
     let systime = system_time();
     let e = &endex.enclave;
+    println!("unsealing account {}", unseal_req.account);
     // get condition value from db sealed
     let mut states = user_state.state.lock().unwrap();
     if !states.contains_key(&unseal_req.account) {
@@ -566,7 +567,7 @@ pub async fn unseal(
             _ => {
                 return HttpResponse::Ok().json(BaseResp{status: FAIL.to_string()})
             }
-        }        
+        }
     }
     // return sealed secret when pass verify
     let secret_stmt = format!(
@@ -576,6 +577,7 @@ pub async fn unseal(
     let usecrets = persistence::query_user_secret(
         &endex.db_pool, secret_stmt);
     if usecrets.is_empty() {
+        println!("not find any secrets");
         return HttpResponse::Ok().json(BaseResp{status: FAIL.to_string()});
     }
     let secret_value = usecrets[0].tee_secret.clone();
