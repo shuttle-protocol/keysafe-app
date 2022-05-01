@@ -115,10 +115,14 @@ pub async fn auth(
 ) -> HttpResponse {
     let e = &endex.enclave;
     let result = gen_random();
-    sendmail(&auth_req.account, &result.to_string(), &endex.conf);
-    let mut states = user_state.state.lock().unwrap();
-    states.insert(auth_req.account.clone(), result.to_string());
-    HttpResponse::Ok().json(MailResp{status: SUCC.to_string(), code: result.to_string()})
+    let sr = sendmail(&auth_req.account, &result.to_string(), &endex.conf);
+    if sr == 0 {
+        let mut states = user_state.state.lock().unwrap();
+        states.insert(auth_req.account.clone(), result.to_string());
+        HttpResponse::Ok().json(MailResp{status: SUCC.to_string(), code: result.to_string()})
+    } else {
+        HttpResponse::Ok().json(MailResp{status: FAIL.to_string(), code: result.to_string()})
+    }
 }
 
 #[derive(Deserialize)]
@@ -226,8 +230,12 @@ pub async fn register_mail_auth(
     if states.contains_key(&reg_mail_auth_req.account) {
         let result = gen_random();
         states.insert(reg_mail_auth_req.account.clone(), result.to_string());
-        sendmail(&reg_mail_auth_req.mail, &result.to_string(), &endex.conf);
-        HttpResponse::Ok().json(MailResp{status: SUCC.to_string(), code: result.to_string()})    
+        let sr = sendmail(&reg_mail_auth_req.mail, &result.to_string(), &endex.conf);
+        if sr == 0 {
+            HttpResponse::Ok().json(MailResp{status: SUCC.to_string(), code: result.to_string()})    
+        } else {
+            HttpResponse::Ok().json(MailResp{status: FAIL.to_string(), code: result.to_string()})
+        }
     } else {
         HttpResponse::Ok().json(BaseResp {status: FAIL.to_string()})
     }
@@ -489,10 +497,10 @@ pub async fn unseal(
     })
 }  
 
-fn sendmail(account: &str, msg: &str, conf: &HashMap<String, String>) {
+fn sendmail(account: &str, msg: &str, conf: &HashMap<String, String>) -> i32 {
     if conf.get("env").unwrap() == "dev" {
         println!("send mail {} to {}", msg, account);
-        return;
+        return 0;
     }
     println!("send mail {} to {}", msg, account);
     let email = Message::builder()
@@ -512,10 +520,10 @@ fn sendmail(account: &str, msg: &str, conf: &HashMap<String, String>) {
         .build();
 
     // Send the email
-    match mailer.send(&email) {
-        Ok(_) => println!("Email sent successfully!"),
-        Err(e) => panic!("Could not send email: {:?}", e),
-    }
+     match mailer.send(&email) {
+         Ok(v) => { println!("sendmail succeed"); 0 },
+         Err(e) => { println!("sendmail failed"); -1 },
+     }
 }
 
 fn system_time() -> u64 {
@@ -606,8 +614,12 @@ pub async fn notify_user(
     match result {
         sgx_status_t::SGX_SUCCESS =>  {
             if notifyReq.t.eq("email") {
-                sendmail(&notifyReq.cond, &return_val.to_string(), &endex.conf);
-                HttpResponse::Ok().body("confirm code sent")
+                let r = sendmail(&notifyReq.cond, &return_val.to_string(), &endex.conf);
+                if r == 0 {
+                    HttpResponse::Ok().body("confirm code sent")
+                } else {
+                    HttpResponse::Ok().body("send mail failed")
+                }
             } else if notifyReq.t.eq("mobile") {
                 HttpResponse::Ok().body("confirm code sent")
             } else {
