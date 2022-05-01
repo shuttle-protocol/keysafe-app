@@ -509,7 +509,7 @@ pub async fn unseal(
     // get condition value from db sealed
     let mut states = user_state.state.lock().unwrap();
     if !states.contains_key(&unseal_req.account) {
-        print!("user {} is not a login-user", &unseal_req.account);
+        println!("user {} is not a login-user", &unseal_req.account);
         return HttpResponse::Ok().json(BaseResp{status: FAIL.to_string()});
     }
     // get condition
