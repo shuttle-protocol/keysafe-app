@@ -383,14 +383,14 @@ pub async fn register_gauth(
             }
             let hex_cipher: String = chars.into_iter().collect();
             println!("cipher hex {:?}", hex_cipher);
-            let hex_sealed = hex::encode(&sealed_gauth[0..sealed_size.try_into().unwrap()]);
+            //let hex_sealed = hex::encode(&sealed_gauth[0..sealed_size.try_into().unwrap()]);
             // let hex_cipher = hex::encode(&cipher_gauth[0..cipher_size.try_into().unwrap()]);
             persistence::insert_user_cond(
                 &endex.db_pool,
                 persistence::UserCond {
                     kid: register_gauth_req.account.clone(),
                     cond_type: "gauth".to_string(),
-                    tee_cond_value: hex_sealed.to_string(),
+                    tee_cond_value: hex_cipher[0..26].to_string(),
                     tee_cond_size: 256
                 }
             );
@@ -529,18 +529,20 @@ pub async fn unseal(
             return HttpResponse::Ok().json(BaseResp{status: FAIL.to_string()})
         }
         let cond_value = uconds[0].tee_cond_value.clone();
-        let sealed_gauth = hex::decode(cond_value).expect("Decode failed.");
+        //let sealed_gauth = hex::decode(cond_value).expect("Decode failed.");
         let mut sgx_result = sgx_status_t::SGX_SUCCESS;
         let result = unsafe {
             ecall::ec_verify_gauth_code(
                 e.geteid(),
                 &mut sgx_result,
                 unseal_req.cipher_cond_value.parse::<i32>().unwrap(),
-                sealed_gauth.as_ptr() as * const c_char,
+                cond_value.as_ptr() as * const c_char,
                 system_time()
             )
         };
-        match result {
+        println!("sgx result return {}", result);
+        println!("sgx result in arg {}", sgx_result);
+        match sgx_result {
             sgx_status_t::SGX_SUCCESS => {
             },
             _ => {
