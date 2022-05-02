@@ -610,10 +610,10 @@ fn sendmail(account: &str, msg: &str, conf: &HashMap<String, String>) -> i32 {
         .build();
 
     // Send the email
-     match mailer.send(&email) {
-         Ok(v) => { println!("sendmail succeed"); 0 },
-         Err(e) => { println!("sendmail failed"); -1 },
-     }
+    match mailer.send(&email) {
+        Ok(_) => { println!("Email sent successfully!"); return 0 },
+        Err(e) => { panic!("Could not send email: {:?}", e); return 1 },
+    }
 }
 
 fn system_time() -> u64 {
