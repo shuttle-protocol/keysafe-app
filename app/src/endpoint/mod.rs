@@ -592,6 +592,9 @@ fn sendmail(account: &str, msg: &str, conf: &HashMap<String, String>) -> i32 {
         println!("send mail {} to {}", msg, account);
         return 0;
     }
+    if conf.contains_key("proxy_mail") {
+        return proxy_mail(account, msg, conf);
+    }
     println!("send mail {} to {}", msg, account);
     let email = Message::builder()
         .from("Verification Node <verify@keysafe.network>".parse().unwrap())
@@ -621,6 +624,33 @@ fn system_time() -> u64 {
         Ok(n) => n.as_secs(),
         Err(_) => panic!("SystemTime before UNIX EPOCH!"),
     }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct ProxyMailReq {
+    accout: String,
+    msg: String
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct ProxyMailResp {
+    status: String
+}
+
+fn proxy_mail(account: &str, msg: &str, conf: &HashMap<String, String>) -> i32 {
+    let proxy_mail_server = conf.get("proxy_mail_server").unwrap();
+    let client =  reqwest::blocking::Client::new();
+    let proxy_mail_req = ProxyMailReq {
+        accout: account.to_owned(),
+        msg: msg.to_owned()
+    };
+    let res = client.post(proxy_mail_server)
+        .json(&proxy_mail_req)
+        .send().unwrap().json::<ProxyMailResp>().unwrap();
+    if res.status == SUCC {
+        return 0;
+    }
+    return 1;
 }
 
 #[get("/health")]

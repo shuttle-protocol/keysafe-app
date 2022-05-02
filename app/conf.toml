@@ -5,3 +5,5 @@ email_server = ""
 db_user = ""
 db_password = ""
 node_api_port = 30000
+proxy_mail = "1"
+proxy_mail_server = "http://47.93.85.187:30001/mail"
