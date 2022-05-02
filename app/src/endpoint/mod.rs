@@ -120,9 +120,9 @@ pub async fn auth(
     if sr == 0 {
         let mut states = user_state.state.lock().unwrap();
         states.insert(auth_req.account.clone(), result.to_string());
-        HttpResponse::Ok().json(MailResp{status: SUCC.to_string(), code: result.to_string()})
+        HttpResponse::Ok().json(BaseResp{status: SUCC.to_string()})
     } else {
-        HttpResponse::Ok().json(MailResp{status: FAIL.to_string(), code: result.to_string()})
+        HttpResponse::Ok().json(BaseResp{status: FAIL.to_string()})
     }
 }
 
@@ -254,9 +254,9 @@ pub async fn register_mail_auth(
         states.insert(reg_mail_auth_req.account.clone(), result.to_string());
         let sr = sendmail(&reg_mail_auth_req.mail, &result.to_string(), &endex.conf);
         if sr == 0 {
-            HttpResponse::Ok().json(MailResp{status: SUCC.to_string(), code: result.to_string()})    
+            HttpResponse::Ok().json(BaseResp{status: SUCC.to_string()})    
         } else {
-            HttpResponse::Ok().json(MailResp{status: FAIL.to_string(), code: result.to_string()})
+            HttpResponse::Ok().json(BaseResp{status: FAIL.to_string()})
         }
     } else {
         HttpResponse::Ok().json(BaseResp {status: FAIL.to_string()})
