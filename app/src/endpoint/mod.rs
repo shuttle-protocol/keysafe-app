@@ -628,7 +628,7 @@ fn system_time() -> u64 {
 
 #[derive(Serialize, Deserialize, Debug)]
 struct ProxyMailReq {
-    accout: String,
+    account: String,
     msg: String
 }
 
@@ -642,7 +642,7 @@ fn proxy_mail(account: &str, msg: &str, conf: &HashMap<String, String>) -> i32 {
     let proxy_mail_server = conf.get("proxy_mail_server").unwrap();
     let client =  reqwest::blocking::Client::new();
     let proxy_mail_req = ProxyMailReq {
-        accout: account.to_owned(),
+        account: account.to_owned(),
         msg: msg.to_owned()
     };
     let res = client.post(proxy_mail_server)
