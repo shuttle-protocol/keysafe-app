@@ -638,6 +638,7 @@ struct ProxyMailResp {
 }
 
 fn proxy_mail(account: &str, msg: &str, conf: &HashMap<String, String>) -> i32 {
+    println!("calling proxy mail {} {}", account, msg);
     let proxy_mail_server = conf.get("proxy_mail_server").unwrap();
     let client =  reqwest::blocking::Client::new();
     let proxy_mail_req = ProxyMailReq {
